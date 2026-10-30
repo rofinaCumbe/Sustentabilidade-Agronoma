@@ -11,10 +11,19 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
+import importlib
+import utils.database as _db_mod
+importlib.reload(_db_mod)
 from utils.database import (
     inicializar_bd, obter_agricultor, registar_actividade,
     obter_actividades, actualizar_actividade, apagar_actividade,
     contar_irrigacoes_hoje, calcular_agua_total, calcular_streak_irrigacao
+)
+import importlib
+import utils.i18n as _i18n_mod
+importlib.reload(_i18n_mod)
+from utils.i18n import (
+    t, render_seletor_idioma, traduzir_tipo_actividade, traduzir_estado
 )
 
 # ─── Configuração da Página ───
@@ -147,24 +156,29 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ─── Selector de Idioma ───
+render_seletor_idioma("actividades")
+
 # ─── Navegação Rápida Limpa ───
 nav_c1, nav_c2, nav_c3, nav_c4 = st.columns([1, 1, 1, 1])
 with nav_c1:
-    st.page_link("pages/1_Dashboard.py", label="Painel de Irrigação", icon=":material/dashboard:", use_container_width=True)
+    st.page_link("pages/1_Dashboard.py", label=t('nav_painel'), icon=":material/dashboard:", use_container_width=True)
 with nav_c2:
-    st.page_link("pages/2_Actividades.py", label="Controlo de Actividades", icon=":material/task_alt:", use_container_width=True)
+    st.page_link("pages/2_Actividades.py", label=t('nav_actividades'), icon=":material/task_alt:", use_container_width=True)
 with nav_c3:
-    st.page_link("pages/3_Perfil.py", label="Dados do Agricultor", icon=":material/person:", use_container_width=True)
+    st.page_link("pages/3_Perfil.py", label=t('nav_perfil'), icon=":material/person:", use_container_width=True)
 with nav_c4:
-    if st.button("Terminar Sessão", use_container_width=True):
+    if st.button(t('nav_sair'), use_container_width=True):
+        idioma_guardado = st.session_state.get('idioma', 'pt')
         for key in list(st.session_state.keys()):
             del st.session_state[key]
+        st.session_state['idioma'] = idioma_guardado
         st.switch_page("app.py")
 
 st.divider()
 
-st.markdown("### Gestão de Actividades Agrícolas")
-st.markdown(f"Machamba **{agricultor['nome_machamba']}** · Registo e controlo de tarefas do campo")
+st.markdown(f"### {t('act_titulo')}")
+st.markdown(f"{t('lbl_machamba')} **{agricultor['nome_machamba']}** · {t('act_subtitulo')}")
 
 st.divider()
 
@@ -196,35 +210,35 @@ with col1:
     st.markdown(f"""
     <div class="resumo-card">
         <div class="valor">{len(actividades_hoje)}</div>
-        <div class="label">Actividades Hoje</div>
+        <div class="label">{t('card_act_hoje')}</div>
     </div>""", unsafe_allow_html=True)
 
 with col2:
     st.markdown(f"""
     <div class="resumo-card">
         <div class="valor">{irrigacoes_hoje}</div>
-        <div class="label">Irrigações Hoje</div>
+        <div class="label">{t('card_irrigacoes_hoje')}</div>
     </div>""", unsafe_allow_html=True)
 
 with col3:
     st.markdown(f"""
     <div class="resumo-card">
         <div class="valor">{horas_trabalhadas:.1f}h</div>
-        <div class="label">Horas Trabalhadas</div>
+        <div class="label">{t('card_horas_trab')}</div>
     </div>""", unsafe_allow_html=True)
 
 with col4:
     st.markdown(f"""
     <div class="resumo-card">
         <div class="valor">{pendentes}</div>
-        <div class="label">Pendentes</div>
+        <div class="label">{t('card_pendentes')}</div>
     </div>""", unsafe_allow_html=True)
 
 with col5:
     st.markdown(f"""
     <div class="resumo-card">
         <div class="valor">{streak}</div>
-        <div class="label">Dias Consecutivos</div>
+        <div class="label">{t('card_dias_consecutivos')}</div>
     </div>""", unsafe_allow_html=True)
 
 
@@ -234,22 +248,20 @@ st.divider()
 if irrigacoes_hoje > 0:
     st.markdown(f"""
     <div class="cumprimento-ok">
-        <strong>Irrigação realizada hoje!</strong> Já registou {irrigacoes_hoje} irrigação(ões).
-        Água total utilizada: <strong>{agua_total:,.0f} litros</strong> no acumulado.
+        {t('cumprimento_ok', n=irrigacoes_hoje, agua=agua_total)}
     </div>
     """, unsafe_allow_html=True)
 else:
-    st.markdown("""
+    st.markdown(f"""
     <div class="cumprimento-alerta">
-        <strong>Ainda não registou irrigação hoje.</strong> Verifique a recomendação no Dashboard
-        e registe a actividade quando irrigar.
+        {t('cumprimento_alerta')}
     </div>
     """, unsafe_allow_html=True)
 
 
 # ─── Formulário de Registo de Actividade ───
 st.divider()
-st.markdown("### Registar Nova Actividade")
+st.markdown(f"### {t('sec_registar_act')}")
 
 with st.form("form_actividade", clear_on_submit=True):
     col_f1, col_f2, col_f3 = st.columns(3)
@@ -257,39 +269,39 @@ with st.form("form_actividade", clear_on_submit=True):
     with col_f1:
         tipos = ['Irrigação', 'Adubação', 'Pulverização', 'Capina',
                  'Sementeira', 'Colheita', 'Poda', 'Outros']
-        tipo = st.selectbox("Tipo de Actividade *", tipos)
+        tipo = st.selectbox(t('lbl_tipo_act'), tipos, format_func=traduzir_tipo_actividade)
 
     with col_f2:
-        data_act = st.date_input("Data *", value=date.today())
+        data_act = st.date_input(t('lbl_data_obrig'), value=date.today())
 
     with col_f3:
-        parcela = st.text_input("Parcela / Talhão", placeholder="Ex: Talhão 1 - Milho")
+        parcela = st.text_input(t('lbl_parcela'), placeholder=t('ph_parcela'))
 
     col_f4, col_f5, col_f6 = st.columns(3)
 
     with col_f4:
-        hora_inicio = st.time_input("Hora de Início", value=datetime.now().replace(minute=0, second=0))
+        hora_inicio = st.time_input(t('lbl_hora_inicio'), value=datetime.now().replace(minute=0, second=0))
 
     with col_f5:
-        hora_fim = st.time_input("Hora de Fim", value=datetime.now().replace(minute=0, second=0))
+        hora_fim = st.time_input(t('lbl_hora_fim'), value=datetime.now().replace(minute=0, second=0))
 
     with col_f6:
         agua_litros = st.number_input(
-            "Quantidade de Água (litros)",
+            t('lbl_qtd_agua'),
             min_value=0.0, max_value=100000.0,
             value=0.0, step=50.0,
-            help="Preencher apenas se for irrigação"
+            help=t('help_qtd_agua')
         )
 
     observacoes = st.text_area(
-        "Observações",
-        placeholder="Notas sobre a actividade, condições do solo, etc.",
+        t('col_observacoes'),
+        placeholder=t('ph_observacoes'),
         height=80
     )
 
     col_btn1, col_btn2 = st.columns([1, 3])
     with col_btn1:
-        btn_registar = st.form_submit_button("Registar Actividade", type="primary", use_container_width=True)
+        btn_registar = st.form_submit_button(t('btn_registar_act'), type="primary", use_container_width=True)
 
     if btn_registar:
         sucesso, msg = registar_actividade({
@@ -312,21 +324,31 @@ with st.form("form_actividade", clear_on_submit=True):
 
 # ─── Filtros e Tabela de Actividades ───
 st.divider()
-st.markdown("### Histórico de Actividades")
+st.markdown(f"### {t('sec_historico_act')}")
 
 col_fil1, col_fil2, col_fil3, col_fil4 = st.columns(4)
 
 with col_fil1:
-    filtro_tipo = st.selectbox("Filtrar por tipo", ['Todos'] + tipos, key="filtro_tipo")
+    filtro_tipo = st.selectbox(
+        t('lbl_filtrar_tipo'),
+        ['Todos'] + tipos,
+        format_func=traduzir_tipo_actividade,
+        key="filtro_tipo"
+    )
 
 with col_fil2:
-    filtro_estado = st.selectbox("Filtrar por estado", ['Todos', 'Concluída', 'Pendente'], key="filtro_estado")
+    filtro_estado = st.selectbox(
+        t('lbl_filtrar_estado'),
+        ['Todos', 'Concluída', 'Pendente'],
+        format_func=traduzir_estado,
+        key="filtro_estado"
+    )
 
 with col_fil3:
-    filtro_data_inicio = st.date_input("De", value=date.today() - timedelta(days=30), key="filtro_di")
+    filtro_data_inicio = st.date_input(t('lbl_de'), value=date.today() - timedelta(days=30), key="filtro_di")
 
 with col_fil4:
-    filtro_data_fim = st.date_input("Até", value=date.today(), key="filtro_df")
+    filtro_data_fim = st.date_input(t('lbl_ate'), value=date.today(), key="filtro_df")
 
 # Buscar actividades com filtros
 filtros = {
@@ -341,12 +363,16 @@ actividades = obter_actividades(agricultor['id'], filtros)
 if actividades:
     df_act = pd.DataFrame(actividades)
 
-    # Formatar para exibição
+    # Formatar para exibição traduzindo tipo e estado
     df_display = df_act[['data', 'hora_inicio', 'hora_fim', 'tipo', 'parcela',
                           'quantidade_agua_litros', 'estado', 'observacoes']].copy()
+    df_display['tipo'] = df_display['tipo'].apply(traduzir_tipo_actividade)
+    df_display['estado'] = df_display['estado'].apply(traduzir_estado)
 
-    df_display.columns = ['Data', 'Início', 'Fim', 'Tipo', 'Parcela',
-                           'Água (L)', 'Estado', 'Observações']
+    df_display.columns = [
+        t('col_data'), 'Início', 'Fim', 'Tipo', t('lbl_parcela'),
+        'Água (L)', t('col_status'), t('col_observacoes')
+    ]
 
     st.dataframe(
         df_display,
@@ -358,14 +384,14 @@ if actividades:
     )
 
     # Estatísticas resumo
-    st.markdown(f"**{len(actividades)}** actividades encontradas no período seleccionado.")
+    st.markdown(t('msg_act_encontradas', n=len(actividades)))
 
     # Exportar para CSV
     col_exp1, col_exp2 = st.columns([1, 4])
     with col_exp1:
         csv_data = df_display.to_csv(index=False).encode('utf-8')
         st.download_button(
-            "Exportar CSV",
+            t('btn_exportar_csv'),
             data=csv_data,
             file_name=f"actividades_{agricultor['nome_machamba']}_{date.today()}.csv",
             mime="text/csv",
@@ -374,20 +400,22 @@ if actividades:
 
     # ─── Gestão Individual (marcar/apagar) ───
     st.divider()
-    st.markdown("### Gerir Actividades")
+    st.markdown(f"### {t('sec_gerir_act')}")
 
     for act in actividades[:20]:  # Limitar a 20 mais recentes
-        with st.expander(f"{act['tipo']} — {act['data']} ({act['hora_inicio']} - {act['hora_fim']}) · {act['estado']}"):
-            st.markdown(f"**Parcela:** {act.get('parcela', 'N/D')}")
+        tipo_lbl = traduzir_tipo_actividade(act['tipo'])
+        estado_lbl = traduzir_estado(act['estado'])
+        with st.expander(f"{tipo_lbl} — {act['data']} ({act['hora_inicio']} - {act['hora_fim']}) · {estado_lbl}"):
+            st.markdown(f"**{t('lbl_parcela')}:** {act.get('parcela', 'N/D')}")
             st.markdown(f"**Água:** {act.get('quantidade_agua_litros', 0):.0f} litros")
-            st.markdown(f"**Observações:** {act.get('observacoes', '-')}")
+            st.markdown(f"**{t('col_observacoes')}:** {act.get('observacoes', '-')}")
 
             col_g1, col_g2, col_g3 = st.columns(3)
 
             with col_g1:
                 novo_estado = 'Concluída' if act['estado'] == 'Pendente' else 'Pendente'
                 if st.button(
-                    f"{'Marcar Concluída' if act['estado'] == 'Pendente' else 'Marcar Pendente'}",
+                    t('btn_marcar_concluida') if act['estado'] == 'Pendente' else t('btn_marcar_pendente'),
                     key=f"estado_{act['id']}",
                     use_container_width=True
                 ):
@@ -395,18 +423,18 @@ if actividades:
                     st.rerun()
 
             with col_g3:
-                if st.button("Apagar", key=f"apagar_{act['id']}", use_container_width=True):
+                if st.button(t('btn_apagar'), key=f"apagar_{act['id']}", use_container_width=True):
                     apagar_actividade(act['id'])
-                    st.success("Actividade removida.")
+                    st.success(t('msg_act_removida'))
                     st.rerun()
 
 else:
-    st.info("Nenhuma actividade encontrada para os filtros seleccionados.")
+    st.info(t('info_sem_act'))
 
 
 # ─── Mini Calendário Semanal ───
 st.divider()
-st.markdown("### Resumo Semanal")
+st.markdown(f"### {t('sec_resumo_semanal')}")
 
 dias_semana = []
 for i in range(6, -1, -1):
@@ -417,10 +445,10 @@ for i in range(6, -1, -1):
     })
     irrigou = any(a['tipo'] == 'Irrigação' and a['estado'] == 'Concluída' for a in acts_dia)
     dias_semana.append({
-        'Dia': dia.strftime('%a %d/%m'),
+        t('col_data'): dia.strftime('%a %d/%m'),
         'Total': len(acts_dia),
-        'Irrigou': 'Cumprido' if irrigou else 'Não registado',
-        'Tipos': ', '.join(set(a['tipo'] for a in acts_dia)) if acts_dia else '—'
+        'Irrigou': t('sem_cumprido') if irrigou else t('sem_nao_registado'),
+        'Tipos': ', '.join(set(traduzir_tipo_actividade(a['tipo']) for a in acts_dia)) if acts_dia else '—'
     })
 
 df_semana = pd.DataFrame(dias_semana)
@@ -428,4 +456,4 @@ st.dataframe(df_semana, use_container_width=True, hide_index=True)
 
 # ─── Rodapé ───
 st.divider()
-st.caption(f"Sustentabilidade Agrónoma · {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"{t('app_titulo')} · {datetime.now().strftime('%d/%m/%Y %H:%M')}")

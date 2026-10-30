@@ -6,6 +6,7 @@ Consumo da API Open-Meteo para previsões e dados de clima em Moçambique.
 import requests
 import pandas as pd
 from datetime import datetime
+from utils.i18n import traduzir_dia_semana
 
 # Cidades de Moçambique com coordenadas geográficas
 CIDADES_MOCAMBIQUE = {
@@ -118,19 +119,13 @@ def processar_previsao_5dias(dados_api: dict) -> pd.DataFrame:
     """Converte a previsão diária de 5 dias num DataFrame do Pandas."""
     daily = dados_api.get('daily', {})
 
-    dias_semana_pt = {
-        'Monday': 'Segunda', 'Tuesday': 'Terça', 'Wednesday': 'Quarta',
-        'Thursday': 'Quinta', 'Friday': 'Sexta', 'Saturday': 'Sábado',
-        'Sunday': 'Domingo'
-    }
-
     registos = []
     datas = daily.get('time', [])
 
     for i, data_str in enumerate(datas):
         data_obj = datetime.strptime(data_str, '%Y-%m-%d')
         dia_semana_en = data_obj.strftime('%A')
-        dia_semana = dias_semana_pt.get(dia_semana_en, dia_semana_en)
+        dia_semana = traduzir_dia_semana(dia_semana_en)
         data_fmt = data_obj.strftime('%d/%m')
 
         codigo_wmo = daily.get('weather_code', [0])[i] if i < len(daily.get('weather_code', [])) else 0

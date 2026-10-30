@@ -5,6 +5,7 @@ Avaliação inteligente baseada em temperatura, precipitação, ET0 e humidade d
 
 import pandas as pd
 from datetime import datetime
+from utils.i18n import traduzir_nivel_irrigacao, traduzir_recomendacao_5dias
 
 
 # Níveis de recomendação de irrigação
@@ -139,6 +140,7 @@ def avaliar_irrigacao_actual(dados_actuais: dict, df_previsao: pd.DataFrame) -> 
     horario = definir_horario_ideal(temp)
 
     info_nivel = NIVEIS_IRRIGACAO[nivel]
+    rotulo_trad, descricao_trad = traduzir_nivel_irrigacao(nivel)
 
     return {
         'nivel': nivel,
@@ -146,8 +148,8 @@ def avaliar_irrigacao_actual(dados_actuais: dict, df_previsao: pd.DataFrame) -> 
         'cor': info_nivel['cor'],
         'cor_fundo': info_nivel['cor_fundo'],
         'icone': info_nivel['icone'],
-        'rotulo': info_nivel['rotulo'],
-        'descricao': info_nivel['descricao'],
+        'rotulo': rotulo_trad,
+        'descricao': descricao_trad,
         'lamina_mm': lamina,
         'horario_ideal': horario,
         'factores': {
@@ -221,32 +223,32 @@ def avaliar_calendario_5dias(df_previsao: pd.DataFrame) -> pd.DataFrame:
 
         # Lógica de decisão
         if precip > 5 or prob_chuva > 70:
-            recomendacoes.append('Não Irrigar')
+            recomendacoes.append(traduzir_recomendacao_5dias('Não Irrigar'))
             icones.append('BAIXO')
             observacoes.append('Chuva prevista suficiente para suprir necessidades hídricas.')
             laminas.append(0)
         elif temp_max > 35 and precip < 2:
-            recomendacoes.append('Irrigar (Urgente)')
+            recomendacoes.append(traduzir_recomendacao_5dias('Irrigar (Urgente)'))
             icones.append('URGENTE')
             observacoes.append(f'Calor extremo ({temp_max:.0f}°C). Irrigar de madrugada. ET0: {et0:.1f} mm.')
             laminas.append(round(et0 * 1.3, 1))
         elif temp_max > 30 and precip < 2:
-            recomendacoes.append('Irrigar')
+            recomendacoes.append(traduzir_recomendacao_5dias('Irrigar'))
             icones.append('IDEAL')
             observacoes.append(f'Temperaturas altas ({temp_max:.0f}°C). Dia ideal para irrigar pela manhã cedo.')
             laminas.append(round(et0 * 1.1, 1))
         elif temp_media > 25 and precip < 3:
-            recomendacoes.append('Irrigar se Possível')
+            recomendacoes.append(traduzir_recomendacao_5dias('Irrigar se Possível'))
             icones.append('MODERADO')
-            observacoes.append(f'Clima ameno-quente. Monitorar o solo.')
+            observacoes.append('Clima ameno-quente. Monitorar o solo.')
             laminas.append(round(et0, 1))
         elif temp_media < 20:
-            recomendacoes.append('Não Irrigar')
+            recomendacoes.append(traduzir_recomendacao_5dias('Não Irrigar'))
             icones.append('BAIXO')
             observacoes.append('Temperaturas frescas. Baixa evapotranspiração.')
             laminas.append(0)
         else:
-            recomendacoes.append('Opcional')
+            recomendacoes.append(traduzir_recomendacao_5dias('Opcional'))
             icones.append('OPCIONAL')
             observacoes.append('Condições estáveis. Verificar humidade do solo.')
             laminas.append(round(et0 * 0.7, 1))

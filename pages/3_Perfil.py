@@ -10,9 +10,19 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
+import importlib
+import utils.database as _db_mod
+importlib.reload(_db_mod)
 from utils.database import (
     inicializar_bd, obter_agricultor, actualizar_agricultor,
     calcular_agua_total, calcular_streak_irrigacao, hash_senha
+)
+import importlib
+import utils.i18n as _i18n_mod
+importlib.reload(_i18n_mod)
+from utils.i18n import (
+    IDIOMAS, t, obter_idioma, definir_idioma,
+    render_seletor_idioma, traduzir_cultura
 )
 
 # ─── Configuração ───
@@ -137,18 +147,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ─── Selector de Idioma ───
+render_seletor_idioma("perfil")
+
 # ─── Navegação Rápida Limpa ───
 nav_c1, nav_c2, nav_c3, nav_c4 = st.columns([1, 1, 1, 1])
 with nav_c1:
-    st.page_link("pages/1_Dashboard.py", label="Painel de Irrigação", icon=":material/dashboard:", use_container_width=True)
+    st.page_link("pages/1_Dashboard.py", label=t('nav_painel'), icon=":material/dashboard:", use_container_width=True)
 with nav_c2:
-    st.page_link("pages/2_Actividades.py", label="Controlo de Actividades", icon=":material/task_alt:", use_container_width=True)
+    st.page_link("pages/2_Actividades.py", label=t('nav_actividades'), icon=":material/task_alt:", use_container_width=True)
 with nav_c3:
-    st.page_link("pages/3_Perfil.py", label="Dados do Agricultor", icon=":material/person:", use_container_width=True)
+    st.page_link("pages/3_Perfil.py", label=t('nav_perfil'), icon=":material/person:", use_container_width=True)
 with nav_c4:
-    if st.button("Terminar Sessão", use_container_width=True):
+    if st.button(t('nav_sair'), use_container_width=True):
+        idioma_guardado = st.session_state.get('idioma', 'pt')
         for key in list(st.session_state.keys()):
             del st.session_state[key]
+        st.session_state['idioma'] = idioma_guardado
         st.switch_page("app.py")
 
 st.divider()
@@ -167,7 +182,7 @@ st.markdown(f"""
     </div>
     <h2>{agricultor['nome_completo']}</h2>
     <p>{agricultor['nome_machamba']} · {agricultor['provincia']}</p>
-    <p style="font-size: 0.8rem; margin-top: 0.5rem;">ID: {agricultor['id']} · Registado em {agricultor.get('data_registo', 'N/D')[:10]}</p>
+    <p style="font-size: 0.8rem; margin-top: 0.5rem;">ID: {agricultor['id']} · {t('perfil_registado_em')} {agricultor.get('data_registo', 'N/D')[:10]}</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -176,15 +191,15 @@ st.markdown(f"""
 <div class="stat-grid">
     <div class="stat-box">
         <div class="num">{agricultor.get('area_hectares', 0):.1f} ha</div>
-        <div class="lbl">Área da Machamba</div>
+        <div class="lbl">{t('stat_area_machamba')}</div>
     </div>
     <div class="stat-box">
         <div class="num">{agua_total:,.0f} L</div>
-        <div class="lbl">Água Total Registada</div>
+        <div class="lbl">{t('stat_agua_total')}</div>
     </div>
     <div class="stat-box">
         <div class="num">{streak}</div>
-        <div class="lbl">Dias Consecutivos</div>
+        <div class="lbl">{t('card_dias_consecutivos')}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -192,11 +207,11 @@ st.markdown(f"""
 st.divider()
 
 # ─── Formulário de Edição ───
-st.markdown("### Editar Dados")
+st.markdown(f"### {t('sec_editar_dados')}")
 
 with st.form("form_perfil"):
-    nome_edit = st.text_input("Nome Completo", value=agricultor['nome_completo'])
-    machamba_edit = st.text_input("Nome da Machamba", value=agricultor['nome_machamba'])
+    nome_edit = st.text_input(t('lbl_nome_completo').replace(' *', ''), value=agricultor['nome_completo'])
+    machamba_edit = st.text_input(t('lbl_nome_machamba').replace(' *', ''), value=agricultor['nome_machamba'])
 
     col1, col2 = st.columns(2)
     with col1:
@@ -206,15 +221,19 @@ with st.form("form_perfil"):
             'Zambézia', 'Nampula', 'Cabo Delgado', 'Niassa'
         ]
         idx_prov = provincias.index(agricultor['provincia']) if agricultor['provincia'] in provincias else 0
-        provincia_edit = st.selectbox("Província", provincias, index=idx_prov)
+        provincia_edit = st.selectbox(t('lbl_provincia').replace(' *', ''), provincias, index=idx_prov)
 
     with col2:
-        distrito_edit = st.text_input("Distrito", value=agricultor.get('distrito', ''))
+        distrito_edit = st.text_input(t('lbl_distrito'), value=agricultor.get('distrito', ''))
 
     col3, col4 = st.columns(2)
     with col3:
-        telefone_edit = st.text_input("Telefone", value=agricultor['telefone'], disabled=True,
-                                       help="O telefone não pode ser alterado (é usado para login)")
+        telefone_edit = st.text_input(
+            t('lbl_telefone'),
+            value=agricultor['telefone'],
+            disabled=True,
+            help=t('help_tel_bloqueado')
+        )
     with col4:
         email_edit = st.text_input("Email", value=agricultor.get('email', ''))
 
@@ -226,22 +245,40 @@ with st.form("form_perfil"):
             'Amendoim', 'Soja', 'Gergelim', 'Outros'
         ]
         idx_cult = culturas.index(agricultor.get('cultura_principal', 'Milho')) if agricultor.get('cultura_principal') in culturas else 0
-        cultura_edit = st.selectbox("Cultura Principal", culturas, index=idx_cult)
+        cultura_edit = st.selectbox(
+            t('lbl_cultura_principal'),
+            culturas,
+            index=idx_cult,
+            format_func=traduzir_cultura
+        )
 
     with col6:
-        area_edit = st.number_input("Área (hectares)", value=float(agricultor.get('area_hectares', 1)),
-                                     min_value=0.0, max_value=10000.0, step=0.5)
+        area_edit = st.number_input(
+            t('lbl_area_ha'),
+            value=float(agricultor.get('area_hectares', 1)),
+            min_value=0.0, max_value=10000.0, step=0.5
+        )
+
+    codigos_idioma = list(IDIOMAS.keys())
+    idioma_pref = agricultor.get('idioma') or obter_idioma()
+    idx_idioma = codigos_idioma.index(idioma_pref) if idioma_pref in codigos_idioma else 0
+    idioma_edit = st.selectbox(
+        t('seletor_idioma'),
+        codigos_idioma,
+        index=idx_idioma,
+        format_func=lambda c: IDIOMAS[c]
+    )
 
     st.divider()
-    st.markdown("**Alterar Senha** (deixe em branco para manter a actual)")
+    st.markdown(t('sec_alterar_senha'))
 
     col7, col8 = st.columns(2)
     with col7:
-        nova_senha = st.text_input("Nova Senha", type="password", key="nova_senha")
+        nova_senha = st.text_input(t('lbl_nova_senha'), type="password", key="nova_senha")
     with col8:
-        confirmar_nova = st.text_input("Confirmar Nova Senha", type="password", key="confirmar_nova")
+        confirmar_nova = st.text_input(t('lbl_confirmar_nova'), type="password", key="confirmar_nova")
 
-    btn_guardar = st.form_submit_button("Guardar Alterações", type="primary", use_container_width=True)
+    btn_guardar = st.form_submit_button(t('btn_guardar_alteracoes'), type="primary", use_container_width=True)
 
     if btn_guardar:
         dados_update = {
@@ -252,31 +289,35 @@ with st.form("form_perfil"):
             'email': email_edit.strip(),
             'cultura_principal': cultura_edit,
             'area_hectares': area_edit,
+            'idioma': idioma_edit,
         }
 
         # Senha
         if nova_senha:
             if len(nova_senha) < 6:
-                st.error("A nova senha deve ter no mínimo 6 caracteres.")
+                st.error(t('err_senha_curta'))
                 st.stop()
             if nova_senha != confirmar_nova:
-                st.error("As senhas não coincidem.")
+                st.error(t('err_senhas_diferentes'))
                 st.stop()
             dados_update['senha_hash'] = hash_senha(nova_senha)
 
         sucesso = actualizar_agricultor(agricultor['id'], dados_update)
         if sucesso:
             st.session_state['agricultor_nome'] = nome_edit.strip()
-            st.success("Perfil actualizado com sucesso!")
+            definir_idioma(idioma_edit)
+            st.success(t('msg_perfil_actualizado'))
             st.rerun()
         else:
-            st.error("Erro ao actualizar o perfil.")
+            st.error(t('err_perfil_actualizar'))
 
 # ─── Logout ───
 st.divider()
-if st.button("Sair da Conta", use_container_width=True):
+if st.button(t('btn_sair_conta'), use_container_width=True):
+    idioma_guardado = st.session_state.get('idioma', 'pt')
     for key in list(st.session_state.keys()):
         del st.session_state[key]
+    st.session_state['idioma'] = idioma_guardado
     st.switch_page("app.py")
 
-st.caption(f"Sustentabilidade Agrónoma · {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"{t('app_titulo')} · {datetime.now().strftime('%d/%m/%Y %H:%M')}")

@@ -13,8 +13,14 @@ import importlib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import utils.database as db
+import utils.i18n as _i18n_mod
 importlib.reload(db)
+importlib.reload(_i18n_mod)
 from utils.database import inicializar_bd, registar_agricultor, autenticar, redefinir_senha
+from utils.i18n import (
+    IDIOMAS, t, obter_idioma, definir_idioma,
+    render_seletor_idioma, traduzir_cultura
+)
 
 # ─── Configuração da Página ───
 st.set_page_config(
@@ -242,10 +248,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ─── Selector de Idioma no Topo ───
+render_seletor_idioma("app")
+
 
 def render_landing_page():
     """Renderiza a página inicial informativa para o agricultor (sem tags de cabeçalho que geram links)."""
-    st.markdown("""
+    st.markdown(f"""
     <div class="intro-box">
         <svg class="intro-icon" viewBox="0 0 24 24">
             <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
@@ -255,12 +264,9 @@ def render_landing_page():
             <path d="M12 16.5c-2.5 0-4.5-2-4.5-4.5"/>
             <path d="M12 16.5c2.5 0 4.5-2 4.5-4.5"/>
         </svg>
-        <div class="intro-title">Sustentabilidade Agrónoma</div>
+        <div class="intro-title">{t('app_titulo')}</div>
         <p class="intro-text">
-            Plataforma de apoio à decisão de irrigação e gestão de actividades agrícolas para Moçambique.
-            Monitore a temperatura em tempo real na sua machamba ou plantação, identifique os dias e horários
-            ideais para irrigar com base na previsão meteorológica de 5 dias e registe o cumprimento e horário
-            de cada tarefa realizada no campo.
+            {t('landing_subtitulo')}
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -268,78 +274,78 @@ def render_landing_page():
     # Botões de acção principais
     _, col_cta1, col_cta2, _ = st.columns([1.5, 2, 2, 1.5])
     with col_cta1:
-        if st.button("Entrar na Conta", use_container_width=True, type="primary"):
+        if st.button(t('btn_entrar_conta'), use_container_width=True, type="primary"):
             st.session_state['vista_actual'] = 'auth'
             st.rerun()
     with col_cta2:
-        if st.button("Cadastrar Agricultor", use_container_width=True, type="secondary"):
+        if st.button(t('btn_cadastrar_agricultor'), use_container_width=True, type="secondary"):
             st.session_state['vista_actual'] = 'auth'
             st.rerun()
 
     # Funcionalidades Principais (usando <div class="feature-title"> em vez de <h3> para não criar âncoras de URL)
-    st.markdown('<div class="section-heading">Recursos da Plataforma</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-heading">{t("sec_recursos")}</div>', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.markdown("""
+        st.markdown(f"""
         <div class="feature-card">
             <svg class="feature-icon" viewBox="0 0 24 24">
                 <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
             </svg>
-            <div class="feature-title">Monitoria Térmica Real</div>
+            <div class="feature-title">{t('feat1_titulo')}</div>
             <p class="feature-description">
-                Dados meteorológicos reais para as províncias de Moçambique, com previsão para 5 dias.
+                {t('feat1_desc')}
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     with col2:
-        st.markdown("""
+        st.markdown(f"""
         <div class="feature-card">
             <svg class="feature-icon" viewBox="0 0 24 24">
                 <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
             </svg>
-            <div class="feature-title">Decisão de Irrigação</div>
+            <div class="feature-title">{t('feat2_titulo')}</div>
             <p class="feature-description">
-                Indicador de urgência, cálculo da lâmina de água recomendada e dias ideais para regar.
+                {t('feat2_desc')}
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     with col3:
-        st.markdown("""
+        st.markdown(f"""
         <div class="feature-card">
             <svg class="feature-icon" viewBox="0 0 24 24">
                 <path d="M3 3v18h18"/>
                 <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
             </svg>
-            <div class="feature-title">Análise de Dados</div>
+            <div class="feature-title">{t('feat3_titulo')}</div>
             <p class="feature-description">
-                Gráficos interactivos da evolução térmica de 48 horas, humidade do solo e evapotranspiração.
+                {t('feat3_desc')}
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     with col4:
-        st.markdown("""
+        st.markdown(f"""
         <div class="feature-card">
             <svg class="feature-icon" viewBox="0 0 24 24">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
                 <polyline points="22 4 12 14.01 9 11.01"/>
             </svg>
-            <div class="feature-title">Controlo de Actividades</div>
+            <div class="feature-title">{t('feat4_titulo')}</div>
             <p class="feature-description">
-                Registo da hora de início e fim das tarefas na machamba e verificação do cumprimento das regas.
+                {t('feat4_desc')}
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     # Como funciona passo a passo
-    st.markdown('<div class="section-heading">Fluxo de Trabalho</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-heading">{t("sec_fluxo")}</div>', unsafe_allow_html=True)
     col_a, col_b, col_c = st.columns(3)
 
     with col_a:
-        st.markdown("""
+        st.markdown(f"""
         <div class="feature-card">
             <svg class="feature-icon" viewBox="0 0 24 24">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -347,15 +353,15 @@ def render_landing_page():
                 <line x1="20" x2="20" y1="8" y2="14"/>
                 <line x1="23" x2="17" y1="11" y2="11"/>
             </svg>
-            <div class="feature-title">1. Cadastro do Agricultor</div>
+            <div class="feature-title">{t('step1_titulo')}</div>
             <p class="feature-description">
-                Registe os seus dados, a província, a cultura principal e a área em hectares da sua machamba.
+                {t('step1_desc')}
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     with col_b:
-        st.markdown("""
+        st.markdown(f"""
         <div class="feature-card">
             <svg class="feature-icon" viewBox="0 0 24 24">
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
@@ -363,23 +369,23 @@ def render_landing_page():
                 <line x1="8" y1="2" x2="8" y2="6"/>
                 <line x1="3" y1="10" x2="21" y2="10"/>
             </svg>
-            <div class="feature-title">2. Consulta do Painel</div>
+            <div class="feature-title">{t('step2_titulo')}</div>
             <p class="feature-description">
-                Verifique no painel de controlo a previsão para 5 dias e os dias ideais para realizar a irrigação.
+                {t('step2_desc')}
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     with col_c:
-        st.markdown("""
+        st.markdown(f"""
         <div class="feature-card">
             <svg class="feature-icon" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10"/>
                 <polyline points="12 6 12 12 16 14"/>
             </svg>
-            <div class="feature-title">3. Registo de Execução</div>
+            <div class="feature-title">{t('step3_titulo')}</div>
             <p class="feature-description">
-                Aponte as actividades realizadas com a respectiva hora e acompanhe o histórico de cumprimento.
+                {t('step3_desc')}
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -390,44 +396,44 @@ def render_auth_page():
     col_left, col_center, col_right = st.columns([1, 2.2, 1])
 
     with col_center:
-        if st.button("← Voltar à Página Inicial", type="secondary"):
+        if st.button(t('btn_voltar_inicio'), type="secondary"):
             st.session_state['vista_actual'] = 'landing'
             st.rerun()
 
-        st.markdown("""
-        <div class="auth-title">Acesso do Agricultor</div>
-        <div class="auth-subtitle">Entre na sua conta, cadastre a sua machamba ou recupere a sua senha</div>
+        st.markdown(f"""
+        <div class="auth-title">{t('auth_titulo')}</div>
+        <div class="auth-subtitle">{t('auth_subtitulo')}</div>
         """, unsafe_allow_html=True)
 
         tab_login, tab_cadastro, tab_recuperar = st.tabs([
-            "Entrar na Conta",
-            "Cadastrar Agricultor",
-            "Recuperar Senha"
+            t('btn_entrar_conta'),
+            t('btn_cadastrar_agricultor'),
+            t('tab_recuperar')
         ])
 
         # ─── Aba de Login ───
         with tab_login:
             with st.form("form_login", clear_on_submit=False):
                 telefone = st.text_input(
-                    "Telefone",
+                    t('lbl_telefone'),
                     placeholder="Ex: 841234567",
-                    help="Número de telefone usado no cadastro"
+                    help=t('help_telefone_login')
                 )
                 senha = st.text_input(
-                    "Senha",
+                    t('lbl_senha'),
                     type="password",
-                    placeholder="Introduza a sua senha"
+                    placeholder=t('ph_senha')
                 )
 
                 btn_login = st.form_submit_button(
-                    "Entrar",
+                    t('btn_entrar'),
                     use_container_width=True,
                     type="primary"
                 )
 
                 if btn_login:
                     if not telefone or not senha:
-                        st.error("Preencha o número de telefone e a senha.")
+                        st.error(t('err_login_vazio'))
                     else:
                         usuario = autenticar(telefone.strip(), senha)
                         if usuario:
@@ -435,21 +441,24 @@ def render_auth_page():
                             st.session_state['agricultor_id'] = usuario['id']
                             st.session_state['agricultor_nome'] = usuario['nome_completo']
                             st.session_state['agricultor_dados'] = usuario
+                            # Usar o idioma seleccionado na sessão ou o idioma guardado do agricultor
+                            if usuario.get('idioma') and st.session_state.get('idioma', 'pt') == 'pt':
+                                definir_idioma(usuario['idioma'])
                             st.switch_page("pages/1_Dashboard.py")
                         else:
-                            st.error("Telefone ou senha incorrectos. Caso tenha esquecido a senha, utilize a aba 'Recuperar Senha'.")
+                            st.error(t('err_login_invalido'))
 
         # ─── Aba de Cadastro ───
         with tab_cadastro:
             with st.form("form_cadastro", clear_on_submit=True):
                 nome_completo = st.text_input(
-                    "Nome Completo *",
-                    placeholder="O seu nome completo"
+                    t('lbl_nome_completo'),
+                    placeholder=t('ph_nome_completo')
                 )
 
                 nome_machamba = st.text_input(
-                    "Nome da Machamba / Plantação *",
-                    placeholder="Ex: Machamba Boa Colheita"
+                    t('lbl_nome_machamba'),
+                    placeholder=t('ph_nome_machamba')
                 )
 
                 col1, col2 = st.columns(2)
@@ -459,40 +468,40 @@ def render_auth_page():
                         'Inhambane', 'Sofala', 'Manica', 'Tete',
                         'Zambézia', 'Nampula', 'Cabo Delgado', 'Niassa'
                     ]
-                    provincia = st.selectbox("Província *", provincias)
+                    provincia = st.selectbox(t('lbl_provincia'), provincias)
 
                 with col2:
                     distrito = st.text_input(
-                        "Distrito",
+                        t('lbl_distrito'),
                         placeholder="Ex: Boane, Manhiça, Chókwè"
                     )
 
                 col3, col4 = st.columns(2)
                 with col3:
                     telefone_reg = st.text_input(
-                        "Telefone *",
+                        t('lbl_telefone_obrig'),
                         placeholder="Ex: 841234567"
                     )
                 with col4:
                     email_reg = st.text_input(
-                        "Email (opcional)",
+                        t('lbl_email_opc'),
                         placeholder="exemplo@dominio.com"
                     )
 
                 col5, col6 = st.columns(2)
                 with col5:
                     senha_reg = st.text_input(
-                        "Senha * (mínimo 6 caracteres)",
+                        t('lbl_senha_min'),
                         type="password"
                     )
                 with col6:
                     senha_confirmar = st.text_input(
-                        "Confirmar Senha *",
+                        t('lbl_confirmar_senha'),
                         type="password"
                     )
 
                 st.divider()
-                st.markdown("**Dados Agronómicos da Machamba**")
+                st.markdown(t('sec_dados_agronomicos'))
 
                 col7, col8 = st.columns(2)
                 with col7:
@@ -501,18 +510,22 @@ def render_auth_page():
                         'Fruteiras', 'Cana-de-Açúcar', 'Algodão', 'Tabaco',
                         'Amendoim', 'Soja', 'Gergelim', 'Outros'
                     ]
-                    cultura = st.selectbox("Cultura Principal", culturas)
+                    cultura = st.selectbox(
+                        t('lbl_cultura_principal'),
+                        culturas,
+                        format_func=traduzir_cultura
+                    )
 
                 with col8:
                     area = st.number_input(
-                        "Área (hectares)",
+                        t('lbl_area_ha'),
                         min_value=0.1, max_value=10000.0,
                         value=1.0, step=0.5,
                         format="%.1f"
                     )
 
                 btn_cadastro = st.form_submit_button(
-                    "Concluir Cadastro",
+                    t('btn_concluir_cadastro'),
                     use_container_width=True,
                     type="primary"
                 )
@@ -520,15 +533,15 @@ def render_auth_page():
                 if btn_cadastro:
                     erros = []
                     if not nome_completo or len(nome_completo.strip()) < 3:
-                        erros.append("Nome completo é obrigatório (mínimo 3 caracteres).")
+                        erros.append(t('err_nome_curto'))
                     if not nome_machamba:
-                        erros.append("Nome da machamba é obrigatório.")
+                        erros.append(t('err_machamba_obrig'))
                     if not telefone_reg or len(telefone_reg.strip()) < 8:
-                        erros.append("Telefone é obrigatório (mínimo 8 dígitos).")
+                        erros.append(t('err_telefone_curto'))
                     if not senha_reg or len(senha_reg) < 6:
-                        erros.append("A senha deve ter no mínimo 6 caracteres.")
+                        erros.append(t('err_senha_curta'))
                     if senha_reg != senha_confirmar:
-                        erros.append("As senhas não coincidem.")
+                        erros.append(t('err_senhas_diferentes'))
 
                     if erros:
                         for erro in erros:
@@ -544,51 +557,52 @@ def render_auth_page():
                             'senha': senha_reg,
                             'cultura_principal': cultura,
                             'area_hectares': area,
+                            'idioma': obter_idioma(),
                         })
 
                         if sucesso:
                             st.success(msg)
-                            st.info("Conta criada com sucesso! Aceda à aba 'Entrar na Conta' para iniciar sessão.")
+                            st.info(t('msg_conta_criada'))
                         else:
                             st.error(msg)
 
         # ─── Aba de Recuperar Senha ───
         with tab_recuperar:
-            st.markdown("Informe o seu número de telefone e o nome da sua machamba registada para redefinir a senha.")
+            st.markdown(t('rec_instrucoes'))
             with st.form("form_recuperar_senha", clear_on_submit=True):
                 tel_rec = st.text_input(
-                    "Telefone Registado *",
+                    t('lbl_tel_registado'),
                     placeholder="Ex: 841234567"
                 )
                 machamba_rec = st.text_input(
-                    "Nome da Machamba Registada *",
-                    placeholder="Ex: Machamba Boa Colheita"
+                    t('lbl_machamba_registada'),
+                    placeholder=t('ph_nome_machamba')
                 )
                 col_r1, col_r2 = st.columns(2)
                 with col_r1:
                     nova_senha_rec = st.text_input(
-                        "Nova Senha * (mínimo 6 caracteres)",
+                        t('lbl_nova_senha_min'),
                         type="password"
                     )
                 with col_r2:
                     conf_senha_rec = st.text_input(
-                        "Confirmar Nova Senha *",
+                        t('lbl_conf_nova_senha'),
                         type="password"
                     )
 
                 btn_recuperar = st.form_submit_button(
-                    "Redefinir Senha",
+                    t('btn_redefinir_senha'),
                     use_container_width=True,
                     type="primary"
                 )
 
                 if btn_recuperar:
                     if not tel_rec or not machamba_rec:
-                        st.error("Preencha o número de telefone e o nome da machamba.")
+                        st.error(t('err_rec_campos'))
                     elif not nova_senha_rec or len(nova_senha_rec) < 6:
-                        st.error("A nova senha deve ter no mínimo 6 caracteres.")
+                        st.error(t('err_senha_curta'))
                     elif nova_senha_rec != conf_senha_rec:
-                        st.error("As senhas não coincidem.")
+                        st.error(t('err_senhas_diferentes'))
                     else:
                         ok, mensagem = redefinir_senha(tel_rec, machamba_rec, nova_senha_rec)
                         if ok:

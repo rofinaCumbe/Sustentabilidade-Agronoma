@@ -14,6 +14,9 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
+import importlib
+import utils.database as _db_mod
+importlib.reload(_db_mod)
 from utils.database import inicializar_bd, obter_agricultor, contar_irrigacoes_hoje, calcular_streak_irrigacao
 from utils.weather import (
     CIDADES_MOCAMBIQUE, buscar_dados_clima,
@@ -22,6 +25,12 @@ from utils.weather import (
 from utils.irrigation import (
     avaliar_irrigacao_actual, avaliar_calendario_5dias,
     gerar_dicas_agronomicas, NIVEIS_IRRIGACAO
+)
+import importlib
+import utils.i18n as _i18n_mod
+importlib.reload(_i18n_mod)
+from utils.i18n import (
+    t, render_seletor_idioma, traduzir_cultura
 )
 
 # ─── Configuração da Página ───
@@ -179,18 +188,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ─── Selector de Idioma ───
+render_seletor_idioma("dashboard")
+
 # ─── Navegação Rápida Limpa ───
 nav_c1, nav_c2, nav_c3, nav_c4 = st.columns([1, 1, 1, 1])
 with nav_c1:
-    st.page_link("pages/1_Dashboard.py", label="Painel de Irrigação", icon=":material/dashboard:", use_container_width=True)
+    st.page_link("pages/1_Dashboard.py", label=t('nav_painel'), icon=":material/dashboard:", use_container_width=True)
 with nav_c2:
-    st.page_link("pages/2_Actividades.py", label="Controlo de Actividades", icon=":material/task_alt:", use_container_width=True)
+    st.page_link("pages/2_Actividades.py", label=t('nav_actividades'), icon=":material/task_alt:", use_container_width=True)
 with nav_c3:
-    st.page_link("pages/3_Perfil.py", label="Dados do Agricultor", icon=":material/person:", use_container_width=True)
+    st.page_link("pages/3_Perfil.py", label=t('nav_perfil'), icon=":material/person:", use_container_width=True)
 with nav_c4:
-    if st.button("Terminar Sessão", use_container_width=True):
+    if st.button(t('nav_sair'), use_container_width=True):
+        idioma_guardado = st.session_state.get('idioma', 'pt')
         for key in list(st.session_state.keys()):
             del st.session_state[key]
+        st.session_state['idioma'] = idioma_guardado
         st.switch_page("app.py")
 
 st.divider()
@@ -199,18 +213,20 @@ st.divider()
 # ─── Saudação ───
 hora_actual = datetime.now().hour
 if hora_actual < 12:
-    saudacao = "Bom dia"
+    saudacao = t('saudacao_dia')
 elif hora_actual < 18:
-    saudacao = "Boa tarde"
+    saudacao = t('saudacao_tarde')
 else:
-    saudacao = "Boa noite"
+    saudacao = t('saudacao_noite')
+
+cultura_exibicao = traduzir_cultura(agricultor.get('cultura_principal', 'N/D'))
 
 st.markdown(f"### {saudacao}, {agricultor['nome_completo'].split()[0]}!")
 st.markdown(
-    f"Machamba **{agricultor['nome_machamba']}** · "
+    f"{t('lbl_machamba')} **{agricultor['nome_machamba']}** · "
     f"{agricultor['provincia']} · "
-    f"Cultura: **{agricultor.get('cultura_principal', 'N/D')}** · "
-    f"Área: **{agricultor.get('area_hectares', 0):.1f} ha**"
+    f"{t('lbl_cultura')}: **{cultura_exibicao}** · "
+    f"{t('lbl_area')}: **{agricultor.get('area_hectares', 0):.1f} ha**"
 )
 
 # ─── Selecção de Localização ───
@@ -218,7 +234,7 @@ col_cidade, col_refresh = st.columns([4, 1])
 
 with col_cidade:
     cidade_sel = st.selectbox(
-        "Localização para dados meteorológicos",
+        t('sel_localizacao_clima'),
         list(CIDADES_MOCAMBIQUE.keys()),
         index=0,
         key="cidade_dashboard"
@@ -226,16 +242,16 @@ with col_cidade:
 
 with col_refresh:
     st.markdown("<br>", unsafe_allow_html=True)
-    btn_refresh = st.button("Actualizar Dados", use_container_width=True)
+    btn_refresh = st.button(t('btn_actualizar_dados'), use_container_width=True)
 
 # ─── Obter Dados Meteorológicos ───
 coords = CIDADES_MOCAMBIQUE[cidade_sel]
 
-with st.spinner(f"A obter dados meteorológicos para {cidade_sel}..."):
+with st.spinner(t('spinner_clima', cidade=cidade_sel)):
     dados_api = buscar_dados_clima(coords['lat'], coords['lon'])
 
 if not dados_api:
-    st.error("Não foi possível obter dados meteorológicos. Verifique a sua ligação à Internet.")
+    st.error(t('err_clima_internet'))
     st.stop()
 
 # Processar dados
@@ -245,6 +261,10 @@ df_horario = processar_dados_horarios(dados_api, horas=48)
 
 # Avaliação de irrigação
 avaliacao = avaliar_irrigacao_actual(dados_actuais, df_previsao)
+
+# Guardar na sessão para o contexto em tempo real do Assistente IA no topo
+st.session_state['ultimo_clima_actual'] = dados_actuais
+st.session_state['ultima_avaliacao_irrigacao'] = avaliacao
 
 st.divider()
 
@@ -260,8 +280,8 @@ with col1:
             </svg>
         </div>
         <div class="valor">{dados_actuais['temperatura']:.1f}°C</div>
-        <div class="label">Temperatura Actual</div>
-        <div class="label" style="font-size: 0.75rem;">Sensação: {dados_actuais['sensacao_termica']:.1f}°C</div>
+        <div class="label">{t('card_temp_actual')}</div>
+        <div class="label" style="font-size: 0.75rem;">{t('card_sensacao')}: {dados_actuais['sensacao_termica']:.1f}°C</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -280,8 +300,8 @@ with col2:
             </svg>
         </div>
         <div class="valor">{dados_actuais['humidade_relativa']}%</div>
-        <div class="label">Humidade do Ar</div>
-        <div class="label" style="font-size: 0.75rem;">Vento: {dados_actuais['vento']:.0f} km/h</div>
+        <div class="label">{t('card_humidade_ar')}</div>
+        <div class="label" style="font-size: 0.75rem;">{t('card_vento')}: {dados_actuais['vento']:.0f} km/h</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -295,8 +315,8 @@ with col3:
             </svg>
         </div>
         <div class="valor" style="color: {avaliacao['cor']}; font-size: 1rem;">{avaliacao['rotulo'].split('—')[0].strip()}</div>
-        <div class="label">Estado de Irrigação</div>
-        <div class="label" style="font-size: 0.75rem;">Pontuação: {avaliacao['pontuacao']}/100</div>
+        <div class="label">{t('card_estado_irrigacao')}</div>
+        <div class="label" style="font-size: 0.75rem;">{t('card_pontuacao')}: {avaliacao['pontuacao']}/100</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -315,15 +335,15 @@ with col4:
             </svg>
         </div>
         <div class="valor">{irrigacoes_hoje}</div>
-        <div class="label">Irrigações Hoje</div>
-        <div class="label" style="font-size: 0.75rem;">Streak: {streak} dia(s)</div>
+        <div class="label">{t('card_irrigacoes_hoje')}</div>
+        <div class="label" style="font-size: 0.75rem;">{t('card_streak', streak=streak)}</div>
     </div>
     """, unsafe_allow_html=True)
 
 
 # ─── Painel do Semáforo de Irrigação ───
 st.divider()
-st.markdown("### Recomendação de Irrigação")
+st.markdown(f"### {t('sec_recomendacao_irrigacao')}")
 
 col_semaforo, col_detalhes = st.columns([1, 1])
 
@@ -342,29 +362,29 @@ with col_semaforo:
     """, unsafe_allow_html=True)
 
 with col_detalhes:
-    st.markdown("**Detalhes da Avaliação**")
+    st.markdown(t('detalhes_avaliacao'))
 
     det_col1, det_col2 = st.columns(2)
     with det_col1:
-        st.metric("Lâmina de Água Sugerida", f"{avaliacao['lamina_mm']} mm")
-        st.metric("Temperatura", f"{avaliacao['factores']['temperatura']:.1f} °C")
-        st.metric("Precipitação", f"{avaliacao['factores']['precipitacao']:.1f} mm")
+        st.metric(t('met_lamina'), f"{avaliacao['lamina_mm']} mm")
+        st.metric(t('met_temperatura'), f"{avaliacao['factores']['temperatura']:.1f} °C")
+        st.metric(t('met_precipitacao'), f"{avaliacao['factores']['precipitacao']:.1f} mm")
 
     with det_col2:
-        st.metric("Horário Ideal", avaliacao['horario_ideal'].split('(')[0].strip())
-        st.metric("ET0 (Evapotranspiração)", f"{avaliacao['factores']['et0']:.1f} mm/dia")
-        st.metric("Prob. Chuva Prevista", f"{avaliacao['factores']['prob_chuva']:.0f}%")
+        st.metric(t('met_horario_ideal'), avaliacao['horario_ideal'].split('(')[0].strip())
+        st.metric(t('met_et0'), f"{avaliacao['factores']['et0']:.1f} mm/dia")
+        st.metric(t('met_prob_chuva'), f"{avaliacao['factores']['prob_chuva']:.0f}%")
 
     # Volume total para a área da machamba
     area_ha = agricultor.get('area_hectares', 1) or 1
     volume_total = avaliacao['lamina_mm'] * area_ha * 10  # mm * ha * 10 = m³
     if volume_total > 0:
-        st.info(f"Para os seus **{area_ha:.1f} ha**, o volume total estimado é de **{volume_total:,.0f} litros** ({volume_total/1000:.1f} m³).")
+        st.info(t('info_volume_estimado', area=area_ha, litros=volume_total, m3=volume_total / 1000))
 
 
 # ─── Previsão de 5 Dias ───
 st.divider()
-st.markdown("### Previsão Meteorológica — Próximos 5 Dias")
+st.markdown(f"### {t('sec_previsao_5dias')}")
 
 # Enriquecer com recomendações de irrigação
 df_calendario = avaliar_calendario_5dias(df_previsao)
@@ -373,13 +393,13 @@ df_calendario = avaliar_calendario_5dias(df_previsao)
 cols_prev = st.columns(len(df_calendario))
 for i, (_, row) in enumerate(df_calendario.iterrows()):
     with cols_prev[i]:
-        cor_badge = "#2E7D32" if "Ideal" in row['Status'] or "Irrigar" in row['Recomendação'] else "#616161"
+        cor_badge = "#2E7D32" if row['Lâmina (mm)'] > 0 else "#616161"
         st.markdown(f"""
         <div class="metric-card" style="padding: 1rem;">
             <div style="font-weight: 700; color: #1B5E20; margin-bottom: 0.4rem;">{row['Data']}</div>
             <div style="font-size: 0.85rem; color: #424242; margin-bottom: 0.4rem;">{row['Condição']}</div>
             <div style="font-size: 1.2rem; font-weight: 700; color: #212121;">{row['Temp. Máx (°C)']:.0f}°C / {row['Temp. Mín (°C)']:.0f}°C</div>
-            <div style="font-size: 0.8rem; color: #616161; margin-top: 0.3rem;">Precipitação: {row['Precipitação (mm)']:.1f} mm</div>
+            <div style="font-size: 0.8rem; color: #616161; margin-top: 0.3rem;">{t('met_precipitacao')}: {row['Precipitação (mm)']:.1f} mm</div>
             <div style="font-size: 0.8rem; color: #616161;">ET0: {row['ET0 (mm/dia)']:.1f} mm/dia</div>
             <div style="margin-top: 0.6rem; padding: 0.3rem 0.5rem; background: #E8F5E9; border-radius: 6px; font-weight: 600; font-size: 0.82rem; color: {cor_badge};">
                 {row['Recomendação']}
@@ -390,7 +410,7 @@ for i, (_, row) in enumerate(df_calendario.iterrows()):
 
 # ─── Calendário de Irrigação (Tabela) ───
 st.divider()
-st.markdown("### Calendário de Irrigação")
+st.markdown(f"### {t('sec_calendario_irrigacao')}")
 
 # Seleccionar colunas relevantes para a tabela
 df_tabela = df_calendario[['Data', 'Condição', 'Temp. Máx (°C)', 'Temp. Mín (°C)',
@@ -402,25 +422,25 @@ st.dataframe(
     use_container_width=True,
     hide_index=True,
     column_config={
-        'Data': st.column_config.TextColumn('Data', width='medium'),
-        'Condição': st.column_config.TextColumn('Condição', width='medium'),
-        'Temp. Máx (°C)': st.column_config.NumberColumn('Máx', format="%.1f°C"),
-        'Temp. Mín (°C)': st.column_config.NumberColumn('Mín', format="%.1f°C"),
-        'Precipitação (mm)': st.column_config.NumberColumn('Chuva', format="%.1f mm"),
+        'Data': st.column_config.TextColumn(t('col_data'), width='medium'),
+        'Condição': st.column_config.TextColumn(t('col_condicao'), width='medium'),
+        'Temp. Máx (°C)': st.column_config.NumberColumn(t('col_max'), format="%.1f°C"),
+        'Temp. Mín (°C)': st.column_config.NumberColumn(t('col_min'), format="%.1f°C"),
+        'Precipitação (mm)': st.column_config.NumberColumn(t('col_chuva'), format="%.1f mm"),
         'ET0 (mm/dia)': st.column_config.NumberColumn('ET0', format="%.1f"),
-        'Status': st.column_config.TextColumn('Status', width='small'),
-        'Recomendação': st.column_config.TextColumn('Recomendação', width='medium'),
-        'Lâmina (mm)': st.column_config.NumberColumn('Lâmina', format="%.1f mm"),
-        'Observações': st.column_config.TextColumn('Observações', width='large'),
+        'Status': st.column_config.TextColumn(t('col_status'), width='small'),
+        'Recomendação': st.column_config.TextColumn(t('col_recomendacao'), width='medium'),
+        'Lâmina (mm)': st.column_config.NumberColumn(t('col_lamina'), format="%.1f mm"),
+        'Observações': st.column_config.TextColumn(t('col_observacoes'), width='large'),
     }
 )
 
 
 # ─── Gráficos ───
 st.divider()
-st.markdown("### Gráficos de Análise")
+st.markdown(f"### {t('sec_graficos')}")
 
-tab_temp, tab_solo = st.tabs(["Temperatura (48h)", "Humidade do Solo"])
+tab_temp, tab_solo = st.tabs([t('tab_temp_48h'), t('tab_humidade_solo')])
 
 with tab_temp:
     if not df_horario.empty and 'Temperatura (°C)' in df_horario.columns:
@@ -429,7 +449,7 @@ with tab_temp:
             x=df_horario['Hora'],
             y=df_horario['Temperatura (°C)'],
             mode='lines+markers',
-            name='Temperatura',
+            name=t('met_temperatura'),
             line=dict(color='#2E7D32', width=2),
             marker=dict(size=3),
             fill='tozeroy',
@@ -439,14 +459,14 @@ with tab_temp:
         # Linha de referência de 30°C
         fig_temp.add_hline(
             y=30, line_dash="dash", line_color="#F57C00",
-            annotation_text="30°C — Limiar de irrigação alta",
+            annotation_text=t('graf_limiar_30'),
             annotation_position="top right"
         )
 
         fig_temp.update_layout(
-            title="Previsão de Temperatura Horária",
-            xaxis_title="Hora",
-            yaxis_title="Temperatura (°C)",
+            title=t('graf_titulo_temp'),
+            xaxis_title=t('graf_eixo_hora'),
+            yaxis_title=f"{t('met_temperatura')} (°C)",
             template="plotly_white",
             height=400,
             margin=dict(l=40, r=20, t=50, b=40),
@@ -468,7 +488,7 @@ with tab_solo:
                 x=df_solo_plot['Hora'],
                 y=df_solo_plot['Humidade Solo (m³/m³)'],
                 mode='lines',
-                name='Humidade do Solo (3-9cm)',
+                name=f"{t('tab_humidade_solo')} (3-9cm)",
                 line=dict(color='#1565C0', width=2),
                 fill='tozeroy',
                 fillcolor='rgba(21, 101, 192, 0.1)'
@@ -478,14 +498,14 @@ with tab_solo:
             fig_solo.add_trace(go.Bar(
                 x=df_solo_plot['Hora'],
                 y=df_solo_plot['Prob. Chuva (%)'].apply(lambda x: x / 100 * 0.5),
-                name='Prob. Chuva (escala relativa)',
+                name=t('met_prob_chuva'),
                 marker_color='rgba(76, 175, 80, 0.3)',
                 yaxis='y'
             ))
 
             fig_solo.update_layout(
-                title="Humidade Volumétrica do Solo e Probabilidade de Chuva",
-                xaxis_title="Hora",
+                title=t('graf_titulo_solo'),
+                xaxis_title=t('graf_eixo_hora'),
                 yaxis_title="Humidade (m³/m³)",
                 template="plotly_white",
                 height=400,
@@ -502,7 +522,7 @@ with tab_solo:
 
 # ─── Dicas Agronómicas ───
 st.divider()
-st.markdown("### Dicas Agronómicas")
+st.markdown(f"### {t('sec_dicas')}")
 
 dicas = gerar_dicas_agronomicas(dados_actuais, agricultor.get('cultura_principal', ''))
 
@@ -519,6 +539,11 @@ for dica in dicas:
 # ─── Rodapé ───
 st.divider()
 st.caption(
-    f"Dados actualizados em {datetime.now().strftime('%d/%m/%Y às %H:%M')} · "
-    f"Localização: {cidade_sel} ({coords['lat']}, {coords['lon']})"
+    t(
+        'rodape_actualizado',
+        data=datetime.now().strftime('%d/%m/%Y às %H:%M'),
+        cidade=cidade_sel,
+        lat=coords['lat'],
+        lon=coords['lon']
+    )
 )
