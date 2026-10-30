@@ -10,16 +10,12 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-import importlib
 import utils.database as _db_mod
-importlib.reload(_db_mod)
 from utils.database import (
     inicializar_bd, obter_agricultor, actualizar_agricultor,
     calcular_agua_total, calcular_streak_irrigacao, hash_senha
 )
-import importlib
 import utils.i18n as _i18n_mod
-importlib.reload(_i18n_mod)
 from utils.i18n import (
     IDIOMAS, t, obter_idioma, definir_idioma,
     render_seletor_idioma, traduzir_cultura
@@ -40,7 +36,10 @@ if not st.session_state.get('autenticado'):
     st.switch_page("app.py")
     st.stop()
 
-agricultor = obter_agricultor(st.session_state['agricultor_id'])
+# Dados do agricultor logado (em cache de sessão)
+if 'dados_agricultor' not in st.session_state or st.session_state.get('dados_agricultor', {}).get('id') != st.session_state.get('agricultor_id'):
+    st.session_state['dados_agricultor'] = obter_agricultor(st.session_state['agricultor_id'])
+agricultor = st.session_state.get('dados_agricultor')
 if not agricultor:
     st.error("Erro ao carregar perfil.")
     st.stop()
@@ -305,6 +304,7 @@ with st.form("form_perfil"):
         sucesso = actualizar_agricultor(agricultor['id'], dados_update)
         if sucesso:
             st.session_state['agricultor_nome'] = nome_edit.strip()
+            st.session_state['dados_agricultor'] = obter_agricultor(agricultor['id'])
             definir_idioma(idioma_edit)
             st.success(t('msg_perfil_actualizado'))
             st.rerun()

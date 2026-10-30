@@ -14,9 +14,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-import importlib
 import utils.database as _db_mod
-importlib.reload(_db_mod)
 from utils.database import inicializar_bd, obter_agricultor, contar_irrigacoes_hoje, calcular_streak_irrigacao
 from utils.weather import (
     CIDADES_MOCAMBIQUE, buscar_dados_clima,
@@ -26,9 +24,7 @@ from utils.irrigation import (
     avaliar_irrigacao_actual, avaliar_calendario_5dias,
     gerar_dicas_agronomicas, NIVEIS_IRRIGACAO
 )
-import importlib
 import utils.i18n as _i18n_mod
-importlib.reload(_i18n_mod)
 from utils.i18n import (
     t, render_seletor_idioma, traduzir_cultura
 )
@@ -48,8 +44,10 @@ if not st.session_state.get('autenticado'):
     st.switch_page("app.py")
     st.stop()
 
-# Dados do agricultor logado
-agricultor = obter_agricultor(st.session_state['agricultor_id'])
+# Dados do agricultor logado (em cache de sessão para máxima performance)
+if 'dados_agricultor' not in st.session_state or st.session_state.get('dados_agricultor', {}).get('id') != st.session_state.get('agricultor_id'):
+    st.session_state['dados_agricultor'] = obter_agricultor(st.session_state['agricultor_id'])
+agricultor = st.session_state.get('dados_agricultor')
 if not agricultor:
     st.error("Erro ao carregar dados do agricultor.")
     st.stop()
@@ -243,6 +241,10 @@ with col_cidade:
 with col_refresh:
     st.markdown("<br>", unsafe_allow_html=True)
     btn_refresh = st.button(t('btn_actualizar_dados'), use_container_width=True)
+    if btn_refresh:
+        st.cache_data.clear()
+        st.session_state['dados_agricultor'] = obter_agricultor(st.session_state['agricultor_id'])
+        st.rerun()
 
 # ─── Obter Dados Meteorológicos ───
 coords = CIDADES_MOCAMBIQUE[cidade_sel]

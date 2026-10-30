@@ -47,6 +47,9 @@ def get_mongo_db():
             serverSelectionTimeoutMS=2500,
             connectTimeoutMS=2500,
             socketTimeoutMS=3000,
+            maxPoolSize=15,
+            minPoolSize=1,
+            maxIdleTimeMS=45000,
             tlsAllowInvalidCertificates=True,
         )
         client.admin.command("ping")

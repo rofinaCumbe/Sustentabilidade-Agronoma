@@ -227,38 +227,45 @@ def _construir_prompt_sistema(ctx: dict) -> str:
     )
 
 
+_ollama_disponivel = None if not os.environ.get("VERCEL") else False
+
 def _tentar_ollama_ou_gemini(pergunta: str, ctx: dict, historico: list[dict]) -> tuple[str | None, str]:
     """
     1º Tenta usar Ollama local em http://localhost:11434 (auto-detectando o modelo instalado).
     2º Tenta usar a API Gemini se GEMINI_API_KEY estiver definida.
     Retorna (resposta, nome_motor) ou (None, 'AgroIA Contextual').
     """
+    global _ollama_disponivel
     prompt_sistema = _construir_prompt_sistema(ctx)
 
-    # 1. Tentar Ollama Local
-    ollama_url = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-    try:
-        tags_resp = requests.get(f"{ollama_url}/api/tags", timeout=0.8)
-        if tags_resp.status_code == 200:
-            modelos = tags_resp.json().get("models", [])
-            if modelos:
-                modelo_nome = modelos[0].get("name", "llama3")
-                mensagens_ollama = [{"role": "system", "content": prompt_sistema}]
-                for m in historico[-6:]:
-                    mensagens_ollama.append({"role": m["role"], "content": m["content"]})
-                mensagens_ollama.append({"role": "user", "content": pergunta})
+    # 1. Tentar Ollama Local (se disponível)
+    if _ollama_disponivel is not False:
+        ollama_url = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+        try:
+            tags_resp = requests.get(f"{ollama_url}/api/tags", timeout=0.5)
+            if tags_resp.status_code == 200:
+                _ollama_disponivel = True
+                modelos = tags_resp.json().get("models", [])
+                if modelos:
+                    modelo_nome = modelos[0].get("name", "llama3")
+                    mensagens_ollama = [{"role": "system", "content": prompt_sistema}]
+                    for m in historico[-6:]:
+                        mensagens_ollama.append({"role": m["role"], "content": m["content"]})
+                    mensagens_ollama.append({"role": "user", "content": pergunta})
 
-                chat_resp = requests.post(
-                    f"{ollama_url}/api/chat",
-                    json={"model": modelo_nome, "messages": mensagens_ollama, "stream": False},
-                    timeout=15,
-                )
-                if chat_resp.status_code == 200:
-                    conteudo = chat_resp.json().get("message", {}).get("content", "").strip()
-                    if conteudo:
-                        return conteudo, f"Ollama ({modelo_nome})"
-    except Exception:
-        pass
+                    chat_resp = requests.post(
+                        f"{ollama_url}/api/chat",
+                        json={"model": modelo_nome, "messages": mensagens_ollama, "stream": False},
+                        timeout=15,
+                    )
+                    if chat_resp.status_code == 200:
+                        conteudo = chat_resp.json().get("message", {}).get("content", "").strip()
+                        if conteudo:
+                            return conteudo, f"Ollama ({modelo_nome})"
+            else:
+                _ollama_disponivel = False
+        except Exception:
+            _ollama_disponivel = False
 
     # 2. Tentar Gemini API
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()

@@ -6,6 +6,7 @@ Consumo da API Open-Meteo para previsões e dados de clima em Moçambique.
 import requests
 import pandas as pd
 from datetime import datetime
+import streamlit as st
 from utils.i18n import traduzir_dia_semana
 
 # Cidades de Moçambique com coordenadas geográficas
@@ -55,6 +56,7 @@ def obter_descricao_wmo(codigo: int) -> tuple[str, str]:
     return WMO_DESCRICOES.get(codigo, ('Indeterminado', 'GERAL'))
 
 
+@st.cache_data(ttl=900, show_spinner=False)
 def buscar_dados_clima(latitude: float, longitude: float) -> dict | None:
     """
     Obtém dados meteorológicos da API Open-Meteo.

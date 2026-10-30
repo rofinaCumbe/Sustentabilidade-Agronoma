@@ -41,8 +41,6 @@ if hasattr(st, "runtime") and not st.runtime.exists():
 
 import utils.database as db
 import utils.i18n as _i18n_mod
-importlib.reload(db)
-importlib.reload(_i18n_mod)
 from utils.database import inicializar_bd, registar_agricultor, autenticar, redefinir_senha
 from utils.i18n import (
     IDIOMAS, t, obter_idioma, definir_idioma,
