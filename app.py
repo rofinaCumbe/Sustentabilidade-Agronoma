@@ -10,7 +10,34 @@ import os
 import importlib
 
 # Adicionar o directório raiz ao path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+# ─── Exportar Entrypoint ASGI/WSGI para Vercel (@vercel/python) ───
+app = None
+application = None
+handler = None
+
+if hasattr(st, "runtime") and not st.runtime.exists():
+    try:
+        _app_target = os.path.join(ROOT_DIR, "app.py")
+        app = st.App(_app_target)
+    except Exception:
+        async def _fallback_asgi(scope, receive, send):
+            if scope.get("type") == "http":
+                await send({
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [[b"content-type", b"text/html; charset=utf-8"]],
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": b"<h1>Sustentabilidade Agronoma</h1><p>A iniciar servidor...</p>",
+                })
+        app = _fallback_asgi
+    application = app
+    handler = app
 
 import utils.database as db
 import utils.i18n as _i18n_mod
@@ -22,27 +49,28 @@ from utils.i18n import (
     render_seletor_idioma, traduzir_cultura
 )
 
-# ─── Configuração da Página ───
-st.set_page_config(
-    page_title="Sustentabilidade Agrónoma",
-    page_icon=":material/eco:",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# ─── Configuração e Renderização da Página ───
+def render_main():
+    st.set_page_config(
+        page_title="Sustentabilidade Agrónoma",
+        page_icon=":material/eco:",
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
 
-# Inicializar a base de dados
-inicializar_bd()
+    # Inicializar a base de dados
+    inicializar_bd()
 
-# Redireccionar se já autenticado
-if st.session_state.get('autenticado'):
-    st.switch_page("pages/1_Dashboard.py")
+    # Redireccionar se já autenticado
+    if st.session_state.get('autenticado'):
+        st.switch_page("pages/1_Dashboard.py")
 
-# Estado da vista inicial ('landing', 'auth' ou 'recover')
-if 'vista_actual' not in st.session_state:
-    st.session_state['vista_actual'] = 'landing'
+    # Estado da vista inicial ('landing', 'auth' ou 'recover')
+    if 'vista_actual' not in st.session_state:
+        st.session_state['vista_actual'] = 'landing'
 
-# ─── CSS Personalizado (Fundo Branco, Contraste Verde, Sem Âncoras de Link e Responsivo) ───
-st.markdown("""
+    # ─── CSS Personalizado (Fundo Branco, Contraste Verde, Sem Âncoras de Link e Responsivo) ───
+    st.markdown("""
 <style>
     /* Ocultar botão Implantar (Deploy), menu de 3 pontos, barra superior e sidebar na página pública */
     #MainMenu { visibility: hidden !important; display: none !important; }
@@ -248,8 +276,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ─── Selector de Idioma no Topo ───
-render_seletor_idioma("app")
+    # ─── Selector de Idioma no Topo ───
+    render_seletor_idioma("app")
+
+    # ─── Executar Vista Correspondente ───
+    if st.session_state.get('vista_actual') == 'auth':
+        render_auth_page()
+    else:
+        render_landing_page()
 
 
 def render_landing_page():
@@ -611,8 +645,6 @@ def render_auth_page():
                             st.error(mensagem)
 
 
-# ─── Executar Vista Correspondente ───
-if st.session_state.get('vista_actual') == 'auth':
-    render_auth_page()
-else:
-    render_landing_page()
+# ─── Executar Aplicação quando no Runtime Streamlit ───
+if hasattr(st, "runtime") and st.runtime.exists():
+    render_main()
