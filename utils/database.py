@@ -7,6 +7,7 @@ import sqlite3
 import os
 import hashlib
 import uuid
+import tempfile
 from datetime import datetime, timedelta
 from pymongo import MongoClient, ASCENDING, DESCENDING
 
@@ -43,9 +44,9 @@ def get_mongo_db():
     try:
         client = MongoClient(
             MONGODB_URI,
-            serverSelectionTimeoutMS=3500,
-            connectTimeoutMS=3500,
-            socketTimeoutMS=6000,
+            serverSelectionTimeoutMS=2500,
+            connectTimeoutMS=2500,
+            socketTimeoutMS=3000,
             tlsAllowInvalidCertificates=True,
         )
         client.admin.command("ping")
@@ -58,11 +59,29 @@ def get_mongo_db():
 
 
 def _get_sqlite_connection():
-    """Cria conexão com a base de dados SQLite local."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    """Cria conexão com a base de dados SQLite local, garantindo escrita em ambientes Serverless/Vercel (usando /tmp)."""
+    global DB_PATH
+    try:
+        data_dir = os.path.dirname(DB_PATH)
+        os.makedirs(data_dir, exist_ok=True)
+        # Testar escrita
+        test_file = os.path.join(data_dir, '.write_check')
+        with open(test_file, 'w') as f:
+            f.write('1')
+        if os.path.exists(test_file):
+            os.remove(test_file)
+        conn = sqlite3.connect(DB_PATH)
+    except Exception:
+        # Se o filesystem for read-only (ex: /var/task no Vercel), usar diretório temporário do sistema
+        tmp_db = os.path.join(tempfile.gettempdir(), 'sustentabilidade.db')
+        DB_PATH = tmp_db
+        conn = sqlite3.connect(tmp_db)
+
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except Exception:
+        pass
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
@@ -76,55 +95,60 @@ def inicializar_bd():
     if _bd_inicializada:
         return
 
-    # 1. Garantir tabelas SQLite locais
-    conn = _get_sqlite_connection()
-    cursor = conn.cursor()
-    cursor.executescript("""
-        CREATE TABLE IF NOT EXISTS agricultores (
-            id TEXT PRIMARY KEY,
-            nome_completo TEXT NOT NULL,
-            nome_machamba TEXT NOT NULL,
-            provincia TEXT NOT NULL,
-            distrito TEXT,
-            telefone TEXT UNIQUE NOT NULL,
-            email TEXT,
-            senha_hash TEXT NOT NULL,
-            cultura_principal TEXT,
-            area_hectares REAL DEFAULT 0,
-            latitude REAL,
-            longitude REAL,
-            idioma TEXT DEFAULT 'pt',
-            data_registo TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS actividades (
-            id TEXT PRIMARY KEY,
-            agricultor_id TEXT NOT NULL,
-            tipo TEXT NOT NULL,
-            data TEXT NOT NULL,
-            hora_inicio TEXT,
-            hora_fim TEXT,
-            parcela TEXT,
-            quantidade_agua_litros REAL DEFAULT 0,
-            observacoes TEXT,
-            estado TEXT DEFAULT 'Pendente',
-            data_criacao TEXT NOT NULL,
-            FOREIGN KEY (agricultor_id) REFERENCES agricultores(id)
-        );
-    """)
+    # 1. Garantir tabelas SQLite locais de forma segura
+    agricultores_sqlite = []
+    actividades_sqlite = []
     try:
-        cursor.execute("ALTER TABLE agricultores ADD COLUMN idioma TEXT DEFAULT 'pt'")
-    except sqlite3.OperationalError:
+        conn = _get_sqlite_connection()
+        cursor = conn.cursor()
+        cursor.executescript("""
+            CREATE TABLE IF NOT EXISTS agricultores (
+                id TEXT PRIMARY KEY,
+                nome_completo TEXT NOT NULL,
+                nome_machamba TEXT NOT NULL,
+                provincia TEXT NOT NULL,
+                distrito TEXT,
+                telefone TEXT UNIQUE NOT NULL,
+                email TEXT,
+                senha_hash TEXT NOT NULL,
+                cultura_principal TEXT,
+                area_hectares REAL DEFAULT 0,
+                latitude REAL,
+                longitude REAL,
+                idioma TEXT DEFAULT 'pt',
+                data_registo TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS actividades (
+                id TEXT PRIMARY KEY,
+                agricultor_id TEXT NOT NULL,
+                tipo TEXT NOT NULL,
+                data TEXT NOT NULL,
+                hora_inicio TEXT,
+                hora_fim TEXT,
+                parcela TEXT,
+                quantidade_agua_litros REAL DEFAULT 0,
+                observacoes TEXT,
+                estado TEXT DEFAULT 'Pendente',
+                data_criacao TEXT NOT NULL,
+                FOREIGN KEY (agricultor_id) REFERENCES agricultores(id)
+            );
+        """)
+        try:
+            cursor.execute("ALTER TABLE agricultores ADD COLUMN idioma TEXT DEFAULT 'pt'")
+        except sqlite3.OperationalError:
+            pass
+        conn.commit()
+
+        # Ler registos existentes no SQLite se existirem
+        cursor.execute("SELECT * FROM agricultores")
+        agricultores_sqlite = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute("SELECT * FROM actividades")
+        actividades_sqlite = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+    except Exception as e:
         pass
-    conn.commit()
-
-    # Ler todos os registos existentes no SQLite para sincronizar com o MongoDB
-    cursor.execute("SELECT * FROM agricultores")
-    agricultores_sqlite = [dict(r) for r in cursor.fetchall()]
-
-    cursor.execute("SELECT * FROM actividades")
-    actividades_sqlite = [dict(r) for r in cursor.fetchall()]
-    conn.close()
 
     # 2. Inicializar e popular MongoDB Atlas
     db = get_mongo_db()
@@ -193,10 +217,10 @@ def inicializar_bd():
                 {"$set": {"chave": "niveis_irrigacao", "dados": NIVEIS_IRRIGACAO, "actualizado_em": datetime.now().isoformat()}},
                 upsert=True
             )
-
-            _bd_inicializada = True
         except Exception:
             pass
+
+    _bd_inicializada = True
 
 
 # ─── Funções de Autenticação ───

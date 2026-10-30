@@ -8,6 +8,8 @@ font = "sans serif"
 [server]
 headless = true
 port = 8501
+enableCORS = false
+enableXsrfProtection = false
 
 [browser]
 gatherUsageStats = false
@@ -15,4 +17,4 @@ gatherUsageStats = false
 [client]
 toolbarMode = "minimal"
 showSidebarNavigation = false
-showErrorDetails = "none"
+showErrorDetails = "full"
